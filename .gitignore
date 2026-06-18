@@ -1,0 +1,30 @@
+# Environment
+.env
+*.pyc
+__pycache__/
+
+# Generated output
+cache/
+videos/
+*.mp3
+*.mp4
+
+# Database
+*.db
+*.sqlite3
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python
+*.egg-info/
+dist/
+build/
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
