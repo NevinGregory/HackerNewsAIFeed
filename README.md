@@ -10,18 +10,17 @@ https://github.com/user-attachments/assets/placeholder
 ## How It Works
 
 ```
-HN top stories → extract articles → AI writes script → Deepgram TTS →
-→ word-level captions → Minecraft parkour background → vertical .mp4
+HN top stories → extract articles → AI writes script → ElevenLabs TTS →
+→ word-by-word captions → Minecraft parkour background → vertical .mp4
 ```
 
 1. **Fetch** — grabs the current top stories from the [Hacker News API](https://github.com/HackerNews/API)
 2. **Extract** — downloads each linked article and pulls out the clean text via [trafilatura](https://trafilatura.readthedocs.io/)
 3. **Curate** — filters out paywalled, non-English, and code-heavy content
 4. **Script** — an LLM (Gemini or OpenAI) converts the long-form article into a punchy 30–60 second short-form script
-5. **Voiceover** — [Deepgram Aura](https://deepgram.com) TTS generates natural speech
-6. **Captions** — the same audio is transcribed back through Deepgram Nova-2 to get **word-level timestamps**
-7. **Compose** — MoviePy layers everything: random Minecraft parkour clip + audio + word-by-word color-highlighted captions
-8. **Output** — a 1080×1920 H.264 `.mp4` ready for TikTok, Reels, or Shorts
+5. **Voiceover + timestamps** — [ElevenLabs](https://elevenlabs.io) TTS with `convert_with_timestamps` returns both the audio **and** character-level timing in one call — no separate STT step needed, **zero transcription errors**
+6. **Compose** — MoviePy layers everything: random Minecraft parkour clip + audio + word-by-word colour-highlighted captions from the *exact script text*
+7. **Output** — a 1080×1920 H.264 `.mp4` ready for TikTok, Reels, or Shorts
 
 ## Quick Start
 
@@ -29,7 +28,7 @@ HN top stories → extract articles → AI writes script → Deepgram TTS →
 
 - **Python 3.11+** and **[uv](https://docs.astral.sh/uv/)** (or pip)
 - **[ffmpeg](https://ffmpeg.org/)** installed and on your `$PATH`
-- A **Deepgram API key** ([free tier](https://console.deepgram.com/signup) gives 200k chars/mo)
+- An **ElevenLabs API key** ([sign up](https://elevenlabs.io/app/settings/api-keys) — free tier works with cloned/personal voices)
 - A **Gemini API key** ([free tier](https://aistudio.google.com/apikey)) or **OpenAI API key**
 
 ### 1. Clone & Install
@@ -50,7 +49,7 @@ Edit `.env` and fill in your API keys:
 
 ```ini
 # Required
-DEEPGRAM_API_KEY=your_key_here
+ELEVENLABS_API_KEY=your_key_here
 
 # Choose one script provider
 GEMINI_API_KEY=your_gemini_key_here    # recommended (free tier)
@@ -120,15 +119,15 @@ src/
 ├── extractor.py          # trafilatura article extraction + fallback
 ├── curator.py            # Story filtering (paywalls, language, code)
 ├── script_writer.py      # LLM prompt → short-form script (Gemini/OpenAI)
-├── voice_generator.py    # Deepgram TTS REST API → .mp3
-├── transcriber.py        # Deepgram STT REST API → word timestamps
+├── voice_generator.py    # ElevenLabs TTS + word timestamps (single API call)
+├── transcriber.py        # *(legacy)* Deepgram STT — no longer used in pipeline
 ├── composer.py           # MoviePy composition: bg + audio + captions
 └── pipeline.py           # End-to-end orchestrator with checkpointing
 ```
 
 Each pipeline stage updates a `status` field in the database, so interrupted
 runs **resume from the last successful checkpoint** — no re-fetching, no
-re-transcribing.
+re-generating.
 
 ---
 
@@ -136,33 +135,19 @@ re-transcribing.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DEEPGRAM_API_KEY` | *(required)* | Deepgram API key |
+| `ELEVENLABS_API_KEY` | *(required)* | ElevenLabs API key for TTS |
+| `ELEVENLABS_VOICE_ID` | `21m00Tcm4TlvDq8ikWAM` | ElevenLabs voice ID |
+| `ELEVENLABS_VOICE_MODEL` | `eleven_turbo_v2_5` | ElevenLabs model (consider `eleven_multilingual_v2` for 70+ languages) |
 | `GEMINI_API_KEY` | — | Google Gemini key for script generation |
 | `OPENAI_API_KEY` | — | OpenAI key for script generation |
 | `SCRIPT_PROVIDER` | `gemini` | `"gemini"` or `"openai"` |
 | `GEMINI_MODEL` | `gemini-2.0-flash` | Gemini model name |
 | `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI model name |
-| `DEEPGRAM_VOICE_MODEL` | `aura-asteria-en` | Deepgram TTS voice |
+| `DEEPGRAM_API_KEY` | — | *(optional)* Deepgram key — only needed if reverting to legacy STT-based captions |
 | `HN_TOP_STORIES_URL` | `https://hacker-news.firebaseio.com/v0/topstories.json` | HN API endpoint |
 | `HN_ITEM_URL` | `https://hacker-news.firebaseio.com/v0/item/{id}.json` | HN item endpoint |
 | `OUTPUT_DIR` | `videos` | Where final `.mp4`s go |
-| `CACHE_DIR` | `cache` | Audio cache + database |
-
----
-
-## Cost
-
-Using the **free tier** of each service:
-
-| Component | Free Tier | Per-Video Cost |
-|-----------|-----------|----------------|
-| Deepgram TTS | 200k chars/mo | ~500 chars/video |
-| Deepgram STT | $200 credit | ~$0.001/video |
-| Gemini 2.0 Flash | 15 RPM (free) | ~$0.000/video |
-| HN API | Unlimited | $0 |
-| Everything else | Local compute | $0 |
-
-**Realistic cost: $0/month** for up to ~10 videos/day on free tiers.
+| `CACHE_DIR` | `cache` | Audio + word-data cache and SQLite database |
 
 ---
 
@@ -177,6 +162,30 @@ FONT_SIZE = 68          # Caption text size
 HIGHLIGHT_COLOR = "#00FF66"  # Green highlight — change to your brand colour
 WORDS_PER_GROUP = 3     # How many words shown at once (2 for faster pacing)
 ```
+
+### Use a Different Voice
+
+List available voices:
+
+```bash
+uv run python -c "
+from elevenlabs.client import ElevenLabs
+from src.config import get_config
+cfg = get_config()
+client = ElevenLabs(api_key=cfg.elevenlabs_api_key)
+for v in client.voices.get_all().voices:
+    print(f'{v.name:40s} | {v.voice_id:30s} | {v.category}')
+"
+```
+
+Set the one you want in `.env`:
+
+```ini
+ELEVENLABS_VOICE_ID=your_chosen_voice_id
+```
+
+> On the free tier, **cloned/generated** voices only. Premade library voices
+> require a paid subscription.
 
 ### Use a Different LLM for Scripts
 
@@ -196,7 +205,8 @@ slow-motion video will work.
 |---------|----------|
 | **"No .mp4 files in clips dir"** | Download background clips with `hn-feed download-clip <url>` |
 | **"No .ttf font files"** | Place a `.ttf` font in `assets/fonts/` |
-| **Deepgram 401 error** | Check `DEEPGRAM_API_KEY` in `.env` |
+| **ElevenLabs 402 error** | Free plan can't use library voices — clone a voice in the dashboard or upgrade |
+| **ElevenLabs auth error** | Check `ELEVENLABS_API_KEY` in `.env` |
 | **Gemini 403 error** | Check `GEMINI_API_KEY` in `.env` |
 | **"Curation rejected: No extractable article content"** | Article may be paywalled or JS-rendered — try another story |
 | **ffmpeg not found** | Install ffmpeg: `brew install ffmpeg` (macOS) or `apt install ffmpeg` (Linux) |
