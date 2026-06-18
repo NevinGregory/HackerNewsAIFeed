@@ -136,12 +136,12 @@ re-generating.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ELEVENLABS_API_KEY` | *(required)* | ElevenLabs API key for TTS |
-| `ELEVENLABS_VOICE_ID` | `21m00Tcm4TlvDq8ikWAM` | ElevenLabs voice ID |
+| `ELEVENLABS_VOICE_ID` | `CwhRBWXzGAHq8TQ4Fs17` | ElevenLabs voice ID |
 | `ELEVENLABS_VOICE_MODEL` | `eleven_turbo_v2_5` | ElevenLabs model (consider `eleven_multilingual_v2` for 70+ languages) |
 | `GEMINI_API_KEY` | — | Google Gemini key for script generation |
 | `OPENAI_API_KEY` | — | OpenAI key for script generation |
 | `SCRIPT_PROVIDER` | `gemini` | `"gemini"` or `"openai"` |
-| `GEMINI_MODEL` | `gemini-2.0-flash` | Gemini model name |
+| `GEMINI_MODEL` | `gemini-3.5-flash` | Gemini model name |
 | `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI model name |
 | `DEEPGRAM_API_KEY` | — | *(optional)* Deepgram key — only needed if reverting to legacy STT-based captions |
 | `HN_TOP_STORIES_URL` | `https://hacker-news.firebaseio.com/v0/topstories.json` | HN API endpoint |
