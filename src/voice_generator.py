@@ -196,36 +196,20 @@ def _fallback_word_data(script: str) -> list[dict[str, Any]]:
 
 
 def _extract_audio(response: Any) -> bytes:
-    """Pull raw audio bytes from the ElevenLabs SDK response."""
-    audio = getattr(
-        response,
-        "audio",
-        response.get("audio", None) if hasattr(response, "get") else None,
-    )
-    if audio is None:
-        audio = (
-            response.get("audio_base64", None)
-            if hasattr(response, "get")
-            else getattr(response, "audio_base64", None)
-        )
-        if audio:
-            return base64.b64decode(audio)
+    """Pull raw audio bytes from the ElevenLabs SDK response.
 
-    # If audio is a generator/iterator, collect chunks
-    if hasattr(audio, "__iter__") and not isinstance(
-        audio, (bytes, bytearray, str, memoryview)
-    ):
-        return b"".join(audio)  # type: ignore[arg-type]
-
-    return bytes(audio) if isinstance(audio, (bytes, bytearray)) else b""
+    ``AudioWithTimestampsResponse.audio_base_64`` is a base64-encoded
+    string that we decode back to bytes.
+    """
+    b64: str | None = getattr(response, "audio_base_64", None)
+    if b64:
+        return base64.b64decode(b64)
+    return b""
 
 
 def _extract_alignment(response: Any) -> Any | None:
     """Pull the alignment model from the ElevenLabs SDK response."""
-    alignment = getattr(response, "alignment", None)
-    if alignment is None and hasattr(response, "get"):
-        alignment = response.get("alignment")
-    return alignment
+    return getattr(response, "alignment", None)
 
 
 def _audio_cache_path(script: str, config: Config) -> Path:
